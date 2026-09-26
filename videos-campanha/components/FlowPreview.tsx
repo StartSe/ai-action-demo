@@ -45,19 +45,20 @@ function Media({
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [expanded, setExpanded] = useState(false);
+  const [portrait, setPortrait] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const media = video.current;
-    if (!media || !autoPlay) return;
+    if (!media) return;
     const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
     const apply = () => {
-      if (preference.matches) media.pause();
+      if (expanded || !autoPlay || preference.matches) media.pause();
       else void media.play().catch(() => {});
     };
     apply();
     preference.addEventListener("change", apply);
     return () => preference.removeEventListener("change", apply);
-  }, [autoPlay, attempt]);
+  }, [autoPlay, attempt, expanded]);
   return (
     <div
       className="cf-media nodrag nopan nowheel"
@@ -93,15 +94,18 @@ function Media({
             <video
               key={attempt}
               ref={video}
-              aria-label={asset.title}
-              controls={interactive}
-              autoPlay={autoPlay}
+              aria-hidden="true"
+              tabIndex={-1}
+              autoPlay={autoPlay && !expanded}
               loop={autoPlay}
-              muted={autoPlay}
+              muted
               playsInline
               src={asset.url}
               preload="metadata"
-              onLoadedMetadata={() => setReady(true)}
+              onLoadedMetadata={(e) => {
+                setPortrait(e.currentTarget.videoHeight > e.currentTarget.videoWidth);
+                setReady(true);
+              }}
               onError={() => setFailed(true)}
             />
           ) : (
@@ -113,25 +117,25 @@ function Media({
               onError={() => setFailed(true)}
             />
           )}
-          {asset.kind === "image" && ready && interactive && (
+          {ready && interactive && (
             <button
               type="button"
-              className="cf-image-expand nodrag nopan"
-              aria-label={`Ver imagem inteira: ${asset.title}`}
+              className={`cf-image-expand nodrag nopan${asset.kind === "video" ? " cf-video-expand" : ""}`}
+              aria-label={`${asset.kind === "video" ? "Ver vídeo inteiro" : "Ver imagem inteira"}: ${asset.title}`}
               aria-haspopup="dialog"
               onClick={(e) => {
                 e.stopPropagation();
                 setExpanded(true);
               }}
             >
-              <FlowIcon name="expand" />
-              Ver inteira
+              {asset.kind === "video" ? <span className="cf-video-play"><FlowIcon name="video" />Assistir vídeo</span> : <><FlowIcon name="expand" />Ver inteira</>}
             </button>
           )}
           {expanded &&
             createPortal(
-              <ExpandedImage
+              <ExpandedMedia
                 asset={asset}
+                portrait={portrait}
                 onClose={() => setExpanded(false)}
               />,
               document.body,
@@ -142,32 +146,53 @@ function Media({
   );
 }
 
-function ExpandedImage({
+function ExpandedMedia({
   asset,
+  portrait,
   onClose,
 }: {
   asset: MediaAsset;
+  portrait: boolean;
   onClose: () => void;
 }) {
   const [failed, setFailed] = useState(false);
+  const player = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const media = player.current;
+    if (!media) return;
+    void media.play().catch(() => {});
+    return () => media.pause();
+  }, []);
+  const isVideo = asset.kind === "video";
   return (
     <FlowDialog
-      title={`Imagem inteira: ${asset.title}`}
-      className="cf-image-viewer"
+      title={`${isVideo ? "Vídeo inteiro" : "Imagem inteira"}: ${asset.title}`}
+      className={`cf-image-viewer${isVideo && portrait ? " cf-video-viewer-portrait" : ""}`}
       onClose={onClose}
       dismissOnBackdrop
     >
       <header>
         <h2>{asset.title}</h2>
-        <button type="button" onClick={onClose} aria-label="Fechar imagem">
+        <button type="button" onClick={onClose} aria-label={isVideo ? "Fechar vídeo" : "Fechar imagem"}>
           <FlowIcon name="close" />
         </button>
       </header>
       <div className="cf-image-viewer-media">
         {failed ? (
           <p role="alert">
-            Não foi possível carregar a imagem. Feche e tente novamente.
+            Não foi possível carregar {isVideo ? "o vídeo" : "a imagem"}. Feche e tente novamente.
           </p>
+        ) : isVideo ? (
+          <video
+            ref={player}
+            src={asset.url}
+            aria-label={asset.title}
+            controls
+            autoPlay
+            playsInline
+            preload="metadata"
+            onError={() => setFailed(true)}
+          />
         ) : (
           <img
             src={asset.url}

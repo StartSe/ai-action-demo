@@ -8,7 +8,7 @@ import FlowModelPicker from "./FlowModelPicker";
 import { FlowDialog, FlowSkeleton, FlowToasts, useFlowMessages } from "./FlowFeedback";
 import { generationPlan, modelSettings, modelReferences, MODEL_HELP } from "@/lib/flow/experience";
 import { deriveBlock, freePosition, selectReference } from "@/lib/flow/editing";
-import { executeFlow } from "@/lib/flow/execution";
+import { executeFlow, generationBlockReason } from "@/lib/flow/execution";
 import { version } from "@/package.json";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
@@ -82,9 +82,21 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [edgeKind, setEdgeKind] = useState<"input" | "context">("input");
-  const [generating, setBusy] = useState(false);
+  const [coordinating, setBusy] = useState(false);
+  const [manualNodeIds, setManualNodeIds] = useState<string[]>([]);
+  const manualRuns = useRef(new Set<string>());
+  const [batchNodeIds, setBatchNodeIds] = useState<string[]>([]);
+  const batchRuns = useRef(new Set<string>());
+  const checkingJobs = useRef(false);
+  const [checking, setChecking] = useState(false);
+  const generating = coordinating || manualNodeIds.length > 0;
   const busy = generating || uploading;
   const [projectJobs, setProjectJobs] = useState<Job[]>([]);
+  const activeGenerationCount = new Set([
+    ...manualNodeIds,
+    ...sendingIds,
+    ...projectJobs.filter((j) => ["pending", "submitting"].includes(j.status)).map((j) => j.nodeId),
+  ]).size;
   const [remoteId, setRemoteId] = useState("");
   const [deletion, setDeletion] = useState<{ kind: "project" | "block"; id: string; title: string; projectId: string } | null>(null);
   const [confirmRun, setConfirmRun] = useState<string | null>(null);
@@ -206,7 +218,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     [change],
   );
   const open = async (p: Project) => {
-    if (runLock.current || uploadLock.current) {
+    if (runLock.current || manualRuns.current.size || uploadLock.current) {
       setNotice("Aguarde a geração atual antes de trocar de projeto.");
       return;
     }
@@ -228,11 +240,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     runLock.current = true;
     setBusy(true);
     let jobsLoaded = false;
+    checkingJobs.current = true; setChecking(true);
     try {
       const { jobs } = await api(
         `/api/flow-generate?projectId=${encodeURIComponent(p.id)}`,
       );
       jobsLoaded = true;
+      checkingJobs.current = false; setChecking(false);
       setProjectJobs(jobs);
       const seen = new Set<string>();
       const pending: Job[] = [];
@@ -270,13 +284,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
   const restoreProject = useEffectEvent((p: Project) => { void open(p); });
   function removeBlock(id: string) {
     const p = live.current;
-    if (!p || runLock.current) return;
+    if (!p || runLock.current || manualRuns.current.size) return;
     const target = p.nodes.find((n) => n.id === id);
     if (target) setDeletion({ kind: "block", id, title: target.data.title, projectId: p.id });
   }
   async function confirmDeletion() {
     if (!deletion) return;
-    if (runLock.current) throw new Error("Aguarde a geração terminar antes de excluir.");
+    if (runLock.current || manualRuns.current.size) throw new Error("Aguarde a geração terminar antes de excluir.");
     if (deletion.kind === "block") {
       const p = live.current;
       if (!p || p.id !== deletion.projectId) throw new Error("Reabra o projeto antes de excluir o bloco.");
@@ -380,7 +394,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
 
   function patch(data: Partial<Block["data"]>, id = selected) {
     const p = live.current;
-    if (!p || !id || runLock.current || uploadLock.current) return;
+    if (!p || !id || runLock.current || manualRuns.current.size || uploadLock.current) return;
     change({
       ...p,
       nodes: p.nodes.map((n) =>
@@ -452,12 +466,80 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       setError((e as Error).message);
     }
   }
+  function runBlockedReason(p: Project, nodeId: string) {
+    if (uploading) return "Aguarde o envio da imagem.";
+    if (checking) return "Aguarde a consulta das gerações deste projeto.";
+    const reserved = [
+      ...manualNodeIds,
+      ...batchNodeIds,
+      ...projectJobs.filter((j) => ["pending", "submitting", "uncertain"].includes(j.status)).map((j) => j.nodeId),
+    ];
+    return generationBlockReason(p, nodeId, reserved);
+  }
+  async function generateNode(nodeId: string, projectId: string, shouldStop = () => false) {
+    const latest = live.current!;
+    const n = latest.nodes.find((n) => n.id === nodeId)!;
+    if (n.data.kind === "output") {
+      const input = outputSource(latest, n.id);
+      change({ ...latest, nodes: latest.nodes.map((b) => b.id === n.id
+        ? { ...b, data: { ...b.data, assetId: input.data.assetId, dirty: false } } : b) });
+      return;
+    }
+    try {
+      // Saves share a queue; provider requests and tracking run independently.
+      await persist(latest);
+      if (shouldStop() || !mounted.current) return;
+      setSendingIds((ids) => [...ids, n.id]);
+      const result = await api("/api/flow-generate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: crypto.randomUUID(), projectId, nodeId: n.id }),
+      });
+      const now = live.current!;
+      change({ ...now, nodes: now.nodes.map((b) => b.id === n.id
+        ? { ...b, data: { ...b.data, status: "pending" } } : b) });
+      setSendingIds((ids) => ids.filter((id) => id !== n.id));
+      await poll(result.job);
+    } finally { setSendingIds((ids) => ids.filter((id) => id !== n.id)); }
+  }
+  async function runSingle(target: string) {
+    const p = live.current;
+    if (!p || uploadLock.current || checkingJobs.current) return;
+    const blocked = runBlockedReason(p, target) || generationBlockReason(p, target, [...manualRuns.current, ...batchRuns.current]);
+    const plan = generationPlan(p, target, assets);
+    if (blocked || plan.issue) {
+      setSelected(target); setError(blocked || plan.issue!.message); setConfirmRun(null); return;
+    }
+    // Reserve synchronously, before saving, to prevent rapid double submission.
+    manualRuns.current.add(target);
+    setManualNodeIds([...manualRuns.current]);
+    setConfirmRun(null);
+    try {
+      await generateNode(target, p.id);
+      if (live.current?.id === p.id) await persist(live.current);
+    } catch (e) {
+      setError((e as Error).message);
+      // Preserve pending/uncertain submissions without replacing sibling job updates.
+      try {
+        const result = await api(`/api/flow-generate?projectId=${encodeURIComponent(p.id)}`);
+        if (live.current?.id === p.id) setProjectJobs((list) => [
+          ...result.jobs.filter((j: Job) => j.nodeId === target),
+          ...list.filter((j) => j.nodeId !== target),
+        ]);
+      } catch { setTrackingIssue(true); checkingJobs.current = true; setChecking(true); }
+    } finally {
+      manualRuns.current.delete(target);
+      setManualNodeIds([...manualRuns.current]);
+    }
+  }
   async function run(target: string) {
-    if (runLock.current || uploadLock.current) return;
+    if (target !== "all") return runSingle(target);
+    if (runLock.current || manualRuns.current.size || uploadLock.current || checkingJobs.current) return;
     if (live.current) {
       const plan = generationPlan(live.current, target, assets);
       if (plan.issue) { setSelected(plan.issue.nodeId); setError(plan.issue.message); setConfirmRun(null); return; }
     }
+    batchRuns.current = new Set(live.current?.nodes.filter((n) => n.data.kind !== "idea" && (!n.data.assetId || n.data.dirty)).map((n) => n.id));
+    setBatchNodeIds([...batchRuns.current]);
     runLock.current = true;
     setBusy(true);
     stop.current = false;
@@ -474,35 +556,14 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       const progress = () => setSequence({ index: completed, total, title: `${active} em andamento` });
       setNotice("Geração iniciada. As ramificações independentes serão executadas em paralelo.");
       await executeFlow(p, target, async (original) => {
-        const latest = live.current!;
-        const n = latest.nodes.find((n) => n.id === original.id)!;
-        if (n.data.kind === "output") {
-          const input = outputSource(latest, n.id);
-          change({ ...latest, nodes: latest.nodes.map((b) => b.id === n.id
-            ? { ...b, data: { ...b.data, assetId: input.data.assetId, dirty: false } } : b) });
-          return;
-        }
-        active++;
+        const media = original.data.kind !== "output";
+        if (media) active++;
         progress();
         try {
-          // Serialize saves, but overlap provider submissions and polling.
-          await persist(live.current!);
-          if (stop.current) return;
-          setSendingIds((ids) => [...ids, n.id]);
-          const result = await api("/api/flow-generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: crypto.randomUUID(), projectId: p.id, nodeId: n.id }),
-          });
-          const now = live.current!;
-          change({ ...now, nodes: now.nodes.map((b) => b.id === n.id
-            ? { ...b, data: { ...b.data, status: "pending" } } : b) });
-          setSendingIds((ids) => ids.filter((id) => id !== n.id));
-          await poll(result.job);
-          completed++;
+          await generateNode(original.id, p.id, () => stop.current);
+          if (media && !stop.current) completed++;
         } finally {
-          active--;
-          setSendingIds((ids) => ids.filter((id) => id !== n.id));
+          if (media) active--;
           progress();
         }
       }, () => stop.current || !mounted.current);
@@ -515,7 +576,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setSendingIds([]);
+      batchRuns.current.clear();
+      setBatchNodeIds([]);
       setSequence(null);
       setBusy(false);
       runLock.current = false;
@@ -523,7 +585,10 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
         api(
           `/api/flow-generate?projectId=${encodeURIComponent(live.current.id)}`,
         )
-          .then((r) => setProjectJobs(r.jobs))
+          .then((r) => setProjectJobs((list) => [
+            ...r.jobs.filter((j: Job) => !manualRuns.current.has(j.nodeId)),
+            ...list.filter((j) => manualRuns.current.has(j.nodeId)),
+          ]))
           .catch(() => {});
     }
   }
@@ -543,7 +608,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     finally { improveLock.current = false; setImproving(false); }
   }
   async function recover(j: Job, requestId?: string) {
-    if (runLock.current || uploadLock.current) return;
+    if (runLock.current || manualRuns.current.size || uploadLock.current) return;
     runLock.current = true;
     setBusy(true);
     try {
@@ -574,7 +639,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     }
   }
   async function upload(file?: File) {
-    if (!file || uploadLock.current || runLock.current) return;
+    if (!file || uploadLock.current || runLock.current || manualRuns.current.size) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size === 0 || file.size > 10 * 1024 * 1024) {
       setError("Envie JPG, PNG ou WebP de até 10 MB.");
       return;
@@ -598,13 +663,13 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     finally { uploadLock.current = false; setUploading(false); }
   }
   async function resumeTracking() {
-    if (runLock.current || !live.current) return;
+    if (runLock.current || manualRuns.current.size || !live.current) return;
     setTrackingIssue(false);
     setError("");
     await open(live.current);
   }
   async function navigate(v: "projects" | "assets") {
-    if (runLock.current || uploadLock.current) {
+    if (runLock.current || manualRuns.current.size || uploadLock.current) {
       setNotice("Aguarde a geração atual antes de sair do fluxo.");
       return;
     }
@@ -844,13 +909,14 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             <button className="cf-head-action cf-share-button" disabled={busy || sharing} onClick={() => void shareProject(current)} title="Compartilhar preview público"><FlowIcon name="share" />{sharing ? "Compartilhando…" : "Compartilhar"}</button>
             <button
               className="cf-primary cf-head-action"
-              disabled={busy || unsettled}
+              disabled={busy || unsettled || checking}
               onClick={() => setConfirmRun("all")}
             >
               <FlowIcon name="video" />{uploading ? "Enviando imagem…" : generating ? "Gerando…" : "Gerar tudo"}
             </button>
-            {generating && (
+            {batchNodeIds.length > 0 && (
               <button
+                className="cf-head-action cf-pause-button"
                 onClick={() => {
                   stop.current = true;
                   setNotice("As próximas etapas foram pausadas. As gerações enviadas continuam.");
@@ -861,7 +927,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             )}
           </div>
           {(generating || trackingIssue || unsettled || uploading) && <div className={`cf-run-status ${trackingIssue ? "has-issue" : ""}`} role="status">
-            <span>{uploading ? "Enviando imagem…" : trackingIssue ? generating ? "Conexão interrompida. Tentando atualizar o andamento…" : "Acompanhamento interrompido. As gerações já enviadas foram preservadas." : generating ? sequence ? `${sequence.index} de ${sequence.total} concluídas · ${sequence.title}` : "Acompanhando geração em andamento…" : "Há uma geração aguardando confirmação. Selecione o bloco para verificar."}</span>
+            <span>{uploading ? "Enviando imagem…" : trackingIssue ? generating ? "Conexão interrompida. Tentando atualizar o andamento…" : "Acompanhamento interrompido. As gerações já enviadas foram preservadas." : generating ? sequence ? `${sequence.index} de ${sequence.total} concluídas · ${sequence.title}` : activeGenerationCount ? `${activeGenerationCount} ${activeGenerationCount === 1 ? "etapa em geração" : "etapas em geração"}` : "Acompanhando geração em andamento…" : "Há uma geração aguardando confirmação. Selecione o bloco para verificar."}</span>
             {!generating && (trackingIssue || projectJobs.some((j) => j.status === "pending")) && <button onClick={() => void resumeTracking()}>Retomar acompanhamento</button>}
           </div>}
           <div className="cf-editor-body">
@@ -873,6 +939,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                   selected: n.id === selected,
                   data: {
                     ...n.data, asset: assetFor(n.data.assetId),
+                    runDisabled: Boolean(runBlockedReason(current, n.id)),
+                    runBlockedReason: runBlockedReason(current, n.id) || undefined,
                     locked: busy, onRemove: () => removeBlock(n.id),
                     onRun: () => { setSelected(n.id); if (n.data.kind === "output") void run(n.id); else setConfirmRun(n.id); },
                     onPromptChange: (prompt: string) => patch({ prompt }, n.id),
@@ -881,7 +949,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                     onDuplicate: () => derive(n.id, "duplicate"),
                     startedAt: projectJobs.find((j) => j.nodeId === n.id)?.createdAt,
                     jobError: projectJobs.find((j) => j.nodeId === n.id)?.error,
-                    onCancel: () => { stop.current = true; setNotice("As próximas etapas foram pausadas. As gerações enviadas continuam."); },
+                    onCancel: batchNodeIds.includes(n.id) ? () => { stop.current = true; setNotice("As próximas etapas foram pausadas. As gerações enviadas continuam."); } : undefined,
                     status: sendingIds.includes(n.id) ? "sending" : (() => { const j = projectJobs.find((j) => j.nodeId === n.id); return j && ["pending", "failed", "uncertain", "submitting"].includes(j.status) ? j.status : n.data.status; })(),
                   },
                 }))}
@@ -1337,10 +1405,11 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
               <p>A MuAPI cobra pelo modelo e pelos parâmetros escolhidos. O provedor não informa o preço antecipadamente nesta integração.</p>
               {confirmRun === "all" && <p>As etapas necessárias até cada nó folha serão geradas; ramificações independentes rodam em paralelo. Mantenha a aba aberta. Pausar impede novos envios; os já enviados continuam.</p>}
             </> : <p>{higgsfieldConnected ? "O Higgsfield está autorizado. Os modelos deste editor usam a MuAPI, que precisa ser conectada em Configurações." : "Você pode montar e salvar seu fluxo. Para criar imagens e vídeos, conecte sua conta em Configurações."}</p>}
+            {current && confirmRun !== "all" && runBlockedReason(current, confirmRun) && <p className="cf-inline-issue" role="status">{runBlockedReason(current, confirmRun)}</p>}
             {plan?.issue && <div className="cf-inline-issue" role="alert"><strong>{plan.issue.title}</strong><p>{plan.issue.message}</p><button onClick={() => { setSelected(plan.issue!.nodeId); setConfirmRun(null); }}>Revisar etapa</button></div>}
             <div className="cf-confirm-actions">
               <button onClick={() => setConfirmRun(null)}>Voltar ao fluxo</button>
-              {connected ? <button className="cf-primary" disabled={Boolean(plan?.issue) || busy || unsettled} onClick={() => run(confirmRun)}>{plan?.steps.length ? "Confirmar e gerar" : "Atualizar fluxo"}</button> : <button className="cf-primary" onClick={async () => { try { if (live.current) await persist(live.current); router.push("/setup#muapi"); } catch (e) { setError((e as Error).message); } }}>Abrir Configurações ↗</button>}
+              {connected ? <button className="cf-primary" disabled={Boolean(plan?.issue) || (confirmRun === "all" ? busy || unsettled || checking : !current || Boolean(runBlockedReason(current, confirmRun)))} onClick={() => run(confirmRun)}>{plan?.steps.length ? "Confirmar e gerar" : "Atualizar fluxo"}</button> : <button className="cf-primary" onClick={async () => { try { if (live.current) await persist(live.current); router.push("/setup#muapi"); } catch (e) { setError((e as Error).message); } }}>Abrir Configurações ↗</button>}
             </div>
         </FlowDialog>
       )}

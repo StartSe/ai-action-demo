@@ -1012,3 +1012,87 @@ test("receita UGC compartilha influencer e isola produtos A/B até os dois víde
   assert.ok(sent.includes(vb.id));
   assert.equal(sent.filter((id) => id === influencer.id).length, 1);
 });
+
+test("geração individual reserva somente a etapa e suas dependências, liberando a imagem vizinha", () => {
+  const { generationBlockReason } = require("../lib/flow/execution.ts");
+  const p = model.recipe("ugc");
+  const [, influencer, a, b, va, vb] = p.nodes;
+  assert.equal(generationBlockReason(p, b.id, [a.id]), null);
+  assert.equal(generationBlockReason(p, vb.id, [a.id]), null);
+  assert.match(generationBlockReason(p, a.id, [a.id]), /já está gerando/);
+  assert.match(generationBlockReason(p, va.id, [a.id]), /usada como referência/);
+  assert.match(generationBlockReason(p, influencer.id, [a.id]), /está usando esta etapa/);
+  assert.equal(generationBlockReason(p, a.id, [vb.id]), null);
+  assert.match(generationBlockReason(p, b.id, [vb.id]), /está usando esta etapa/);
+  assert.equal(generationBlockReason(p, b.id, [a.id, va.id]), null);
+});
+
+test("API aceita duas imagens UGC simultâneas, evita duplicata e protege referências em uso", async () => {
+  const p = model.recipe("ugc");
+  const [, influencer, a, b, va] = p.nodes;
+  for (const node of [influencer, a, b]) {
+    node.data.assetId = `independent-${node.id}`;
+    store.addAsset({ id: node.data.assetId, kind: "image", url: `https://test.example/${node.id}.png` });
+  }
+  store.save(p);
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push(JSON.parse(init.body));
+    return Response.json({ request_id: crypto.randomUUID() });
+  };
+  const start = (node) => generate.POST(post("flow-generate", { projectId: p.id, nodeId: node.id, id: crypto.randomUUID() }));
+  try {
+    const first = await start(a);
+    assert.equal(first.status, 200);
+    const jobA = (await first.json()).job;
+    assert.equal(jobA.status, "pending");
+    const second = await start(b);
+    assert.equal(second.status, 200);
+    const jobB = (await second.json()).job;
+    assert.equal(jobB.status, "pending");
+    assert.equal(calls.length, 2);
+    assert.equal((await (await start(a)).json()).job.id, jobA.id);
+    assert.equal((await start(va)).status, 400);
+    assert.equal((await start(influencer)).status, 400);
+    assert.equal(calls.length, 2);
+    store.saveJob({ ...jobA, status: "completed" });
+    assert.equal((await start(va)).status, 200);
+    assert.equal(store.job(jobB.id).status, "pending");
+    assert.equal(calls.length, 3);
+  } finally { global.fetch = originalFetch; }
+});
+
+test("UGC e geração de imagens orientam a não escrever o prompt nem acrescentar texto", () => {
+  const { generationInput } = require("../lib/flow/experience.ts");
+  const { promptImprovementInput } = require("../lib/flow/prompt.ts");
+  const p = model.recipe("ugc");
+  const images = p.nodes.filter((n) => n.data.kind === "image");
+  assert.ok(images.every((n) => /nenhum texto/.test(n.data.prompt)));
+  const input = generationInput(p, images[0], []);
+  assert.match(input.prompt, /não devem ser escritos na imagem/);
+  assert.match(input.prompt, /Não acrescente textos, legendas/);
+  // The server guidance also protects projects saved before the template changed.
+  images[0].data.prompt = "Uma influencer mostrando o produto";
+  p.nodes[0].data.prompt = "Campanha UGC";
+  assert.match(generationInput(p, images[0], []).prompt, /Não acrescente textos, legendas/);
+  const improvement = promptImprovementInput(p, images[0], []);
+  assert.match(improvement.system, /imagem sem texto/);
+  assert.match(improvement.system, /Não sugira legendas/);
+});
+
+test("prompts UGC priorizam o produto exato e contínuo sem misturar os ramos", () => {
+  const p = model.recipe("ugc");
+  const [, influencer, a, b, va, vb] = p.nodes;
+  assert.match(influencer.data.prompt, /mãos vazias/);
+  for (const [image, video, label, other] of [[a, va, "A", "B"], [b, vb, "B", "A"]]) {
+    assert.match(image.data.prompt, new RegExp(`exclusivamente o produto ${label}`));
+    assert.match(image.data.prompt, /única fonte para a identidade do produto/);
+    assert.match(image.data.prompt, /produto é o protagonista/);
+    assert.match(video.data.prompt, /uma única tomada contínua/);
+    assert.match(video.data.prompt, /do primeiro ao último quadro/);
+    assert.match(video.data.prompt, /não transforme, deforme, duplique, substitua/);
+    assert.match(video.data.prompt, /sem encobri-lo/);
+    assert.ok(!video.data.prompt.includes(`produto ${other}`));
+    assert.match(video.data.prompt, /Não acrescente outros produtos, textos/);
+  }
+});

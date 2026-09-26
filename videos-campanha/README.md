@@ -1,3 +1,5 @@
+> **Versão 0.4.1 — Creative Flows:** geração individual simultânea, vídeos em modal, prompts UGC com foco e consistência do produto sem textos adicionados, e ajustes visuais. Veja [correções e validação](docs/ux-0.4.1.md).
+
 > **Versão 0.4.0 — Creative Flows:** template UGC com produtos A/B, geração paralela por ramificação, limites de referências por modelo e varinha para melhorar o prompt atual com IA. Veja [novidades e validação](docs/ux-0.4.0.md).
 
 > **Versão 0.3.2 — Creative Flows:** opção Ver inteira abre a imagem original em um modal, sem recorte, no editor e no preview público. Veja [comportamento e validação](docs/ux-0.3.2.md).

@@ -118,13 +118,14 @@ export function generationInput(p: Project, node: Block, assets: Asset[]) {
     return a.url;
   });
   validateSettings(node, images.length);
+  const visualPrompt = node.data.kind === "video" ? prompt : `${prompt}\n\nDireção de imagem: o briefing, o prompt e os nomes das referências descrevem a cena e não devem ser escritos na imagem. Não acrescente textos, legendas, títulos, slogans, letras, preços, selos ou marcas d’água, salvo solicitação explícita do usuário para incluir um texto na arte.`;
   const effectivePrompt =
     references.length &&
     !["veo3.1-fast", "wan2.2", "kling-v2.1-standard-i2v"].includes(
       node.data.model,
     )
-      ? `${prompt}\n\nReferências visuais (na ordem enviada):\n${references.map((r, i) => `Imagem ${i + 1}: ${r.role === "input" ? "entrada principal para esta etapa" : "referência de contexto visual"} (${r.title}).`).join("\n")}`
-      : prompt;
+      ? `${visualPrompt}\n\nReferências visuais (na ordem enviada):\n${references.map((r, i) => `Imagem ${i + 1}: ${r.role === "input" ? "entrada principal para esta etapa" : "referência de contexto visual"} (${r.title}).`).join("\n")}`
+      : visualPrompt;
   return { prompt: effectivePrompt, images };
 }
 

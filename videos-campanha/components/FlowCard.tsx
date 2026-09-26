@@ -127,6 +127,8 @@ export type FlowNodeData = Block["data"] & {
   jobError?: string;
   startedAt?: string;
   locked?: boolean;
+  runDisabled?: boolean;
+  runBlockedReason?: string;
   readOnly?: boolean;
 };
 export default function CreativeNode({
@@ -256,10 +258,10 @@ export default function CreativeNode({
       )}
       {!data.readOnly && data.kind !== "idea" && (
         <div className="cf-node-actions">
-          {loading ? (
+          {loading ? data.onCancel ? (
             <button
               className="nodrag nopan"
-              title="A execução para depois desta geração"
+              title="Pausar os próximos envios; as gerações já enviadas continuam"
               onClick={(e) => {
                 e.stopPropagation();
                 data.onCancel?.();
@@ -267,13 +269,14 @@ export default function CreativeNode({
             >
               Pausar sequência
             </button>
-          ) : (
+          ) : <span className="cf-muted" role="status">Aguardando resultado…</span> : (
             <button
               className="nodrag nopan"
               disabled={
-                data.locked ||
+                (data.runDisabled ?? data.locked) ||
                 ["uncertain", "submitting"].includes(data.status || "")
               }
+              title={data.runBlockedReason}
               onClick={(e) => {
                 e.stopPropagation();
                 data.onRun?.();

@@ -15,7 +15,7 @@ A home agora organiza campanhas em projetos visuais. O gerador anterior continua
 7. Gere uma etapa ou **Gerar tudo**. A confirmação informa que a conta do provedor será cobrada. Mantenha a aba aberta para acompanhar as ramificações em paralelo; recarregar interrompe a sequência local, mas reabrir o projeto retoma o acompanhamento das solicitações já enviadas. Depois, Gerar tudo continua as etapas restantes.
 8. Output seleciona o resultado de uma única entrada direta conectada para entrega. Abra/baixe o arquivo pelo painel ou pela biblioteca global.
 
-Cada bloco mostra o envio ou a espera pelo resultado com tempo decorrido, e um check verde quando o asset está pronto. O vídeo pronto toca automaticamente em loop, sem som, com controles para pausar e ouvir. A preferência de reduzir movimento desliga o autoplay. Resultados desatualizados mostram ↻; falhas conhecidas mostram um alerta.
+Cada bloco mostra o envio ou a espera pelo resultado com tempo decorrido, e um check verde quando o asset está pronto. O vídeo pronto tem prévia em loop, sem som. **Assistir vídeo** abre o vídeo inteiro em modal, com controles para pausar e ouvir e proporção preservada, inclusive vertical. A preferência de reduzir movimento desliga o autoplay. Resultados desatualizados mostram ↻; falhas conhecidas mostram um alerta.
 
 Uma imagem pode alimentar várias ramificações. Selecione a imagem e clique em **Criar ramificação de vídeo** para cada alternativa, ou arraste o mesmo ponto de saída até vários destinos. Os novos blocos são posicionados sem sobreposição e cada um tem seu próprio modelo. Gerar tudo parte dos nós folha e executa suas dependências: ramificações independentes geram em paralelo, ancestrais compartilhados são executados uma única vez e assets prontos são reutilizados. Cada etapa aguarda suas entradas; uma falha bloqueia os seus dependentes, enquanto os outros ramos continuam. Pausar impede novos envios, mantendo o acompanhamento dos já enviados.
 
@@ -100,3 +100,11 @@ Os projetos usam links `/projetos/ID`, protegidos pelo login da conta. O editor 
 Em **Novo projeto**, escolha **UGC · Produtos A e B**. O template inclui ideia → imagem da influencer → duas imagens (influencer com produto A / influencer com produto B) → dois vídeos A/B, em 9:16. Selecione ou envie a referência de cada produto no bloco correspondente antes de gerar. Edite a ideia e os prompts com os detalhes da campanha.
 
 A influencer é gerada uma vez e compartilhada nas duas composições. As imagens A/B podem gerar em paralelo e cada vídeo começa assim que sua própria composição fica pronta. O retrato original é excluído das referências dos vídeos para não virar, por engano, um quadro final do Veo; cada vídeo anima apenas a composição do seu produto. A ideia da campanha continua herdada, e um produto não entra no contexto do outro.
+
+## Correções 0.4.1
+
+Os botões de cada card permitem iniciar imagens e vídeos independentes em paralelo, inclusive enquanto outra etapa ainda está sendo acompanhada. A própria etapa e suas dependências em uso ficam bloqueadas para evitar reenvios ou alterações de referência durante uma geração. Gerar tudo continua reservando as etapas da sequência. Consulte [correções e validação](ux-0.4.1.md).
+
+O template UGC agora pede fotografias sem textos adicionados. A geração também instrui o modelo a não desenhar o conteúdo do briefing/prompt e a não adicionar legendas ou títulos, salvo pedido explícito de texto na arte. Essa orientação vale para novas gerações em projetos existentes, sem alterar as imagens já criadas.
+
+O template UGC também reforça o produto como protagonista: cada ramo deve usar apenas o produto exato da sua referência, mantê-lo nítido e visível e preservar sua identidade em uma tomada contínua, sem cortes, trocas ou deformações. Esses prompts são o padrão dos novos projetos UGC; prompts já salvos continuam editáveis e não são sobrescritos.

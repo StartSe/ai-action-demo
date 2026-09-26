@@ -696,7 +696,8 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   font-weight: 700;
   white-space: nowrap;
 }
-.cf-editor-head > .cf-share-button {
+.cf-editor-head > .cf-share-button,
+.cf-editor-head > .cf-pause-button {
   color: #29213e;
   border: 1px solid #e9e4ee;
   background: #ffffffeb;
@@ -1329,7 +1330,8 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   background: #f7f5f9;
   overflow: hidden;
 }
-.cf-image-viewer-media > img {
+.cf-image-viewer-media > img,
+.cf-image-viewer-media > video {
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -1341,6 +1343,7 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
   font-size: 13px;
 }
 
+.cf-prompt-field { margin-bottom: 17px; }
 .cf-improve-prompt { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; color: var(--cf-purple, #7c3aed); border: 1px solid #e5d9f5; border-radius: 10px; background: #faf7ff; font-size: 12px; }
 .cf-improve-prompt:disabled { opacity: .5; cursor: not-allowed; }
 .cf-reference-preview { display: grid; gap: 8px; padding: 10px; margin-block: 10px; border: 1px solid #e5d9f5; border-radius: 10px; font-size: 12px; }
@@ -1352,3 +1355,10 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 .cf-prompt-dialog textarea:focus-visible { outline: 2px solid #d80bad; outline-offset: 2px; }
 .cf-prompt-dialog textarea[readonly] { color: #756680; background: #f7f5fa; }
 .cf-generation-summary .cf-reference-warning { color: #8a4c00; white-space: normal; }
+
+/* Videos use the same full-media dialog as images; controls stay in the viewer. */
+.cf-image-expand.cf-video-expand { inset: 0; width: 100%; height: 100%; justify-content: center; padding: 0; border: 0; border-radius: inherit; background: transparent; box-shadow: none; }
+.cf-image-expand.cf-video-expand:hover { background: #24132e18; }
+.cf-video-play { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid #ffffffb3; border-radius: 999px; background: #ffffffed; box-shadow: 0 3px 15px #24132e20; }
+.cf-dialog.cf-video-viewer-portrait { width: min(520px, calc(100vw - 32px)); }
+.cf-image-viewer-media > video { background: #17131d; }

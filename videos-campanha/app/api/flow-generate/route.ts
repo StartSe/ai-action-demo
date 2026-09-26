@@ -9,6 +9,7 @@ import {
   type Job,
 } from "@/lib/flow/store";
 import { generationSignature } from "@/lib/flow/model";
+import { generationBlockReason } from "@/lib/flow/execution";
 import { generationInput } from "@/lib/flow/experience";
 import {
   MuapiRejected,
@@ -34,6 +35,10 @@ export async function POST(req: Request) {
         ["pending", "submitting", "uncertain"].includes(j.status),
     );
     if (busy) return Response.json({ job: busy });
+    const blocked = generationBlockReason(p, nodeId, jobs(projectId)
+      .filter((j) => ["pending", "submitting", "uncertain"].includes(j.status))
+      .map((j) => j.nodeId));
+    if (blocked) throw new Error(blocked);
     if (!["image", "video", "transform"].includes(node.data.kind))
       throw new Error("Esta etapa não gera mídia.");
     const { prompt: effectivePrompt, images } = generationInput(p, node, assets());
