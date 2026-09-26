@@ -81,6 +81,16 @@ export function validateSettings(node: Block, imageCount: number) {
     );
 }
 
+/** Keep every connection, but send only the visual inputs the model supports. */
+export function modelReferences(p: Project, node: Block) {
+  const references = referencePlan(p, node.id);
+  const limit = MODELS.find((m) => m.id === node.data.model)?.maxImages ?? 0;
+  return {
+    used: node.data.kind === "video" ? references.slice(0, limit) : references,
+    omitted: node.data.kind === "video" ? references.slice(limit) : [],
+  };
+}
+
 /** Shared preflight: the browser and the paid submission enforce the same inputs. */
 export function generationInput(p: Project, node: Block, assets: Asset[]) {
   const refs = context(p, node.id);
@@ -99,7 +109,7 @@ export function generationInput(p: Project, node: Block, assets: Asset[]) {
     .join("\n\n");
   if (!prompt.trim())
     throw new Error("Escreva uma ideia ou um prompt antes de gerar.");
-  const references = referencePlan(p, node.id);
+  const { used: references } = modelReferences(p, node);
   const images = references.map((r) => {
     const a = assets.find((a) => a.id === r.assetId);
     if (!a) throw new Error("Uma referência não existe mais na biblioteca.");
@@ -127,6 +137,7 @@ export function generationPlan(
   const p = structuredClone(project);
   const available = [...assets];
   const steps: Block[] = [];
+  const warnings: { nodeId: string; message: string }[] = [];
   for (const node of order(p)) {
     if (node.data.kind === "idea" || (target !== "all" && node.id !== target))
       continue;
@@ -136,6 +147,11 @@ export function generationPlan(
         node.data.assetId = outputSource(p, node.id).data.assetId;
       else {
         generationInput(p, node, available);
+        const selection = modelReferences(p, node);
+        if (selection.omitted.length) warnings.push({
+          nodeId: node.id,
+          message: `Limite do modelo: serão usadas ${selection.used.map((r) => r.title).join(", ")}. ${selection.omitted.length} referência(s) permanecerão conectadas sem envio.`,
+        });
         steps.push(structuredClone(node));
         const id = `planned:${node.id}`;
         available.push({
@@ -154,6 +170,7 @@ export function generationPlan(
     } catch (e) {
       return {
         steps,
+        warnings,
         issue: {
           nodeId: node.id,
           title: node.data.title,
@@ -162,5 +179,5 @@ export function generationPlan(
       };
     }
   }
-  return { steps, issue: null };
+  return { steps, warnings, issue: null };
 }

@@ -6,8 +6,9 @@ import DeleteConfirmation from "./DeleteConfirmation";
 import Preview from "./FlowPreview";
 import FlowModelPicker from "./FlowModelPicker";
 import { FlowDialog, FlowSkeleton, FlowToasts, useFlowMessages } from "./FlowFeedback";
-import { generationPlan, modelSettings, MODEL_HELP } from "@/lib/flow/experience";
-import { deriveBlock, freePosition } from "@/lib/flow/editing";
+import { generationPlan, modelSettings, modelReferences, MODEL_HELP } from "@/lib/flow/experience";
+import { deriveBlock, freePosition, selectReference } from "@/lib/flow/editing";
+import { executeFlow } from "@/lib/flow/execution";
 import { version } from "@/package.json";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
@@ -31,7 +32,6 @@ import {
   recipe,
   reconcile,
   receiveGeneration,
-  referencePlan,
   RECIPES,
   type Asset,
   type Block,
@@ -62,7 +62,10 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
     "projects",
   );
   const [selected, setSelected] = useState<string | null>(null);
-  const [sendingId, setSendingId] = useState<string | null>(null);
+  const [sendingIds, setSendingIds] = useState<string[]>([]);
+  const [improving, setImproving] = useState(false);
+  const improveLock = useRef(false);
+  const [suggestion, setSuggestion] = useState<{ projectId: string; nodeId: string; original: string; prompt: string } | null>(null);
   const [higgsfieldConnected, setHiggsfieldConnected] = useState(false);
   const [connected, setConnected] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -465,71 +468,54 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       const p = live.current;
       if (!p) return;
       await persist(p);
-      const ordered = order(p);
-      const todo =
-        target === "all" ? ordered : ordered.filter((n) => n.id === target);
-      const total = todo.filter((n) => !["idea", "output"].includes(n.data.kind) && !(target === "all" && n.data.assetId && !n.data.dirty)).length;
-      let index = 0;
-      for (const original of todo) {
-        if (stop.current) break;
+      const total = generationPlan(p, target, assets).steps.length;
+      let completed = 0;
+      let active = 0;
+      const progress = () => setSequence({ index: completed, total, title: `${active} em andamento` });
+      setNotice("Geração iniciada. As ramificações independentes serão executadas em paralelo.");
+      await executeFlow(p, target, async (original) => {
         const latest = live.current!;
         const n = latest.nodes.find((n) => n.id === original.id)!;
-        if (n.data.kind === "idea") continue;
-        if (target === "all" && n.data.assetId && !n.data.dirty) continue;
         if (n.data.kind === "output") {
           const input = outputSource(latest, n.id);
-          change({
-            ...latest,
-            nodes: latest.nodes.map((b) =>
-              b.id === n.id
-                ? {
-                    ...b,
-                    data: {
-                      ...b.data,
-                      assetId: input.data.assetId,
-                      dirty: false,
-                    },
-                  }
-                : b,
-            ),
-          });
-          continue;
+          change({ ...latest, nodes: latest.nodes.map((b) => b.id === n.id
+            ? { ...b, data: { ...b.data, assetId: input.data.assetId, dirty: false } } : b) });
+          return;
         }
-        await persist(latest);
-        setSequence({ index: ++index, total, title: n.data.title });
-        if (index === 1) setNotice("Geração iniciada. Acompanhe o resultado no bloco.");
-        setSendingId(n.id);
-        const result = await api("/api/flow-generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: crypto.randomUUID(),
-            projectId: latest.id,
-            nodeId: n.id,
-          }),
-        });
-        const now = live.current!;
-        change({
-          ...now,
-          nodes: now.nodes.map((b) =>
-            b.id === n.id
-              ? { ...b, data: { ...b.data, status: "pending" } }
-              : b,
-          ),
-        });
-        setSendingId(null);
-        await poll(result.job);
-      }
+        active++;
+        progress();
+        try {
+          // Serialize saves, but overlap provider submissions and polling.
+          await persist(live.current!);
+          if (stop.current) return;
+          setSendingIds((ids) => [...ids, n.id]);
+          const result = await api("/api/flow-generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: crypto.randomUUID(), projectId: p.id, nodeId: n.id }),
+          });
+          const now = live.current!;
+          change({ ...now, nodes: now.nodes.map((b) => b.id === n.id
+            ? { ...b, data: { ...b.data, status: "pending" } } : b) });
+          setSendingIds((ids) => ids.filter((id) => id !== n.id));
+          await poll(result.job);
+          completed++;
+        } finally {
+          active--;
+          setSendingIds((ids) => ids.filter((id) => id !== n.id));
+          progress();
+        }
+      }, () => stop.current || !mounted.current);
       if (live.current) await persist(live.current);
       setNotice(
         stop.current
-          ? "Execução pausada. A geração já enviada foi preservada."
+          ? "Execução pausada. As gerações já enviadas foram preservadas."
           : "Fluxo atualizado. Seus assets estão na biblioteca.",
       );
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setSendingId(null);
+      setSendingIds([]);
       setSequence(null);
       setBusy(false);
       runLock.current = false;
@@ -540,6 +526,21 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
           .then((r) => setProjectJobs(r.jobs))
           .catch(() => {});
     }
+  }
+  async function improvePrompt(node: Block) {
+    const p = live.current;
+    if (!p || improveLock.current || !node.data.prompt.trim()) return;
+    improveLock.current = true;
+    setImproving(true);
+    try {
+      const result = await api("/api/flow-prompt", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: p, nodeId: node.id }),
+      });
+      if (mounted.current && live.current?.id === p.id)
+        setSuggestion({ projectId: p.id, nodeId: node.id, original: node.data.prompt, prompt: result.prompt });
+    } catch (e) { setError((e as Error).message); }
+    finally { improveLock.current = false; setImproving(false); }
   }
   async function recover(j: Job, requestId?: string) {
     if (runLock.current || uploadLock.current) return;
@@ -590,7 +591,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
       setAssets((list) => [asset, ...list]);
       const p = live.current;
       if (nodeId && p && p.id === projectId) {
-        change({ ...p, nodes: p.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, assetId: n.data.kind === "video" ? n.data.assetId : asset.id, referenceId: asset.id, dirty: n.data.kind === "video", selectionVersion: (n.data.selectionVersion || 0) + 1 } } : n) });
+        change({ ...p, nodes: p.nodes.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, ...selectReference(n, asset.id) } } : n) });
       }
       notify("Imagem adicionada à biblioteca.", "success");
     } catch (e) { setError((e as Error).message); }
@@ -637,7 +638,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
           node.id,
         )
       : [];
-  const references = current && node ? referencePlan(current, node.id) : [];
+  const referenceSelection = current && node ? modelReferences(current, node) : { used: [], omitted: [] };
+  const references = referenceSelection.used;
   const model = MODELS.find((m) => m.id === node?.data.model);
   const assetFor = (id?: string) => assets.find((a) => a.id === id);
   const plan = current && confirmRun ? generationPlan(current, confirmRun, assets) : null;
@@ -851,7 +853,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
               <button
                 onClick={() => {
                   stop.current = true;
-                  setNotice("A execução vai parar após a geração atual.");
+                  setNotice("As próximas etapas foram pausadas. As gerações enviadas continuam.");
                 }}
               >
                 Pausar
@@ -859,7 +861,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             )}
           </div>
           {(generating || trackingIssue || unsettled || uploading) && <div className={`cf-run-status ${trackingIssue ? "has-issue" : ""}`} role="status">
-            <span>{uploading ? "Enviando imagem…" : trackingIssue ? generating ? "Conexão interrompida. Tentando atualizar o andamento…" : "Acompanhamento interrompido. A geração já enviada foi preservada." : generating ? sequence ? `Etapa ${sequence.index} de ${sequence.total} · ${sequence.title}` : "Acompanhando geração em andamento…" : "Há uma geração aguardando confirmação. Selecione o bloco para verificar."}</span>
+            <span>{uploading ? "Enviando imagem…" : trackingIssue ? generating ? "Conexão interrompida. Tentando atualizar o andamento…" : "Acompanhamento interrompido. As gerações já enviadas foram preservadas." : generating ? sequence ? `${sequence.index} de ${sequence.total} concluídas · ${sequence.title}` : "Acompanhando geração em andamento…" : "Há uma geração aguardando confirmação. Selecione o bloco para verificar."}</span>
             {!generating && (trackingIssue || projectJobs.some((j) => j.status === "pending")) && <button onClick={() => void resumeTracking()}>Retomar acompanhamento</button>}
           </div>}
           <div className="cf-editor-body">
@@ -879,8 +881,8 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                     onDuplicate: () => derive(n.id, "duplicate"),
                     startedAt: projectJobs.find((j) => j.nodeId === n.id)?.createdAt,
                     jobError: projectJobs.find((j) => j.nodeId === n.id)?.error,
-                    onCancel: () => { stop.current = true; setNotice("A execução vai parar após a geração atual."); },
-                    status: sendingId === n.id ? "sending" : (() => { const j = projectJobs.find((j) => j.nodeId === n.id); return j && ["pending", "failed", "uncertain", "submitting"].includes(j.status) ? j.status : n.data.status; })(),
+                    onCancel: () => { stop.current = true; setNotice("As próximas etapas foram pausadas. As gerações enviadas continuam."); },
+                    status: sendingIds.includes(n.id) ? "sending" : (() => { const j = projectJobs.find((j) => j.nodeId === n.id); return j && ["pending", "failed", "uncertain", "submitting"].includes(j.status) ? j.status : n.data.status; })(),
                   },
                 }))}
                 edges={current.edges.map((e) => ({
@@ -974,6 +976,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                 <div className="cf-inspector-scroll">
                 <fieldset disabled={busy}>
                   {node.data.kind !== "output" && (
+                    <div className="cf-prompt-field">
                     <label>
                       {node.data.kind === "idea" ? "Sua ideia" : "Prompt"}
                       <textarea
@@ -985,6 +988,10 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                       />
                       <small className="cf-prompt-count">{node.data.prompt.length.toLocaleString("pt-BR")}/10.000</small>
                     </label>
+                    <button className="cf-improve-prompt" disabled={improving || !node.data.prompt.trim()} onClick={() => void improvePrompt(node)} title="Melhorar o prompt atual com a ideia, o fluxo e as imagens de referência">
+                      <FlowIcon name="wand" />{improving ? "Melhorando…" : "Melhorar prompt com IA"}
+                    </button>
+                    </div>
                   )}
                   {!["idea", "output"].includes(node.data.kind) && (
                     <>
@@ -1019,7 +1026,14 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                   {node.data.kind !== "idea" && (
                     <>
                       <details className="cf-context-details" open>
-                      <summary>Referências e contexto <span>{refs.length}</span></summary>
+                      <summary>Referências e contexto <span>{refs.length + (node.data.referenceId ? 1 : 0)}</span></summary>
+                      {referenceSelection.omitted.length > 0 && <p className="cf-inline-issue" role="status">{model?.name} aceita até {model?.maxImages} {model?.maxImages === 1 ? "imagem" : "imagens"}. Serão usadas: {references.map((r) => r.title).join(", ")}. As demais conexões serão preservadas. Desmarque uma referência para usar outra.</p>}
+                      {node.data.referenceId && <div className="cf-reference-preview">
+                        <strong>Imagem de referência original</strong>
+                        <Preview asset={assetFor(node.data.referenceId)} interactive={false} />
+                        <small>{referenceSelection.omitted.some((r) => r.assetId === node.data.referenceId) ? "Não enviada: limite do modelo" : "Preservada ao gerar novamente"}</small>
+                        <button onClick={() => patch({ referenceId: undefined })}>Remover referência</button>
+                      </div>}
                       <label className="cf-check">
                         <input
                           type="checkbox"
@@ -1056,7 +1070,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                                           (r) => r.assetId === n.data.assetId,
                                         );
                                         const ref = references[index];
-                                        if (!ref) return "Referência excluída";
+                                        if (!ref) return referenceSelection.omitted.some((r) => r.assetId === n.data.assetId) ? "Não enviada: limite do modelo" : "Referência excluída";
                                         if (["veo3.1-fast", "wan2.2", "kling-v2.1-standard-i2v"].includes(node.data.model))
                                           return index === 0
                                             ? "Quadro inicial"
@@ -1110,7 +1124,6 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                             onClick={() =>
                               patch({
                                 assetId: undefined,
-                                referenceId: undefined,
                                 status: undefined,
                               })
                             }
@@ -1245,7 +1258,7 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
                         className="cf-primary"
                         onClick={() => {
                           if (current && selected) {
-                            patch({ ...(node?.data.kind !== "video" ? { assetId: a.id } : {}), dirty: node?.data.kind === "video", referenceId: a.id });
+                            if (node) patch(selectReference(node, a.id));
                             notify("Imagem de referência selecionada.", "success");
                           }
                           setPicker(false);
@@ -1320,9 +1333,9 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             <h2>{connected ? "Tudo pronto para criar?" : "Conecte a MuAPI para gerar"}</h2>
             {connected ? <>
               <p>{plan?.steps.length || 0} {plan?.steps.length === 1 ? "geração" : "gerações"} nesta execução. Etapas já atualizadas serão reutilizadas em Gerar tudo.</p>
-              <ul className="cf-generation-summary">{plan?.steps.map((n) => <li key={n.id}><strong>{n.data.title}</strong><span>{MODELS.find((m) => m.id === n.data.model)?.name}</span><small>{n.data.ratio} · {n.data.resolution || MODELS.find((m) => m.id === n.data.model)?.resolutions[0]}{n.data.kind === "video" ? ` · ${n.data.duration}s` : ""}</small></li>)}</ul>
+              <ul className="cf-generation-summary">{plan?.steps.map((n) => <li key={n.id}><strong>{n.data.title}</strong><span>{MODELS.find((m) => m.id === n.data.model)?.name}</span><small>{n.data.ratio} · {n.data.resolution || MODELS.find((m) => m.id === n.data.model)?.resolutions[0]}{n.data.kind === "video" ? ` · ${n.data.duration}s` : ""}</small>{plan.warnings.filter((w) => w.nodeId === n.id).map((w) => <small className="cf-reference-warning" key={w.nodeId}>{w.message}</small>)}</li>)}</ul>
               <p>A MuAPI cobra pelo modelo e pelos parâmetros escolhidos. O provedor não informa o preço antecipadamente nesta integração.</p>
-              {confirmRun === "all" && <p>Mantenha a aba aberta para executar a sequência. Pausar interrompe as próximas etapas; a geração enviada continua.</p>}
+              {confirmRun === "all" && <p>As etapas necessárias até cada nó folha serão geradas; ramificações independentes rodam em paralelo. Mantenha a aba aberta. Pausar impede novos envios; os já enviados continuam.</p>}
             </> : <p>{higgsfieldConnected ? "O Higgsfield está autorizado. Os modelos deste editor usam a MuAPI, que precisa ser conectada em Configurações." : "Você pode montar e salvar seu fluxo. Para criar imagens e vídeos, conecte sua conta em Configurações."}</p>}
             {plan?.issue && <div className="cf-inline-issue" role="alert"><strong>{plan.issue.title}</strong><p>{plan.issue.message}</p><button onClick={() => { setSelected(plan.issue!.nodeId); setConfirmRun(null); }}>Revisar etapa</button></div>}
             <div className="cf-confirm-actions">
@@ -1331,6 +1344,22 @@ export default function CreativeFlow({ initialProjectId }: { initialProjectId?: 
             </div>
         </FlowDialog>
       )}
+      {suggestion && <FlowDialog title="Melhorar prompt" className="cf-prompt-dialog" onClose={() => setSuggestion(null)}>
+        <h2>Revise o prompt melhorado</h2>
+        <p>A sugestão considera seu prompt atual, a ideia e as referências do fluxo.</p>
+        <label>Prompt atual<textarea readOnly rows={3} value={suggestion.original} /></label>
+        <label>Sugestão da IA<textarea rows={6} maxLength={10000} value={suggestion.prompt} onChange={(e) => setSuggestion({ ...suggestion, prompt: e.target.value })} /></label>
+        <div className="cf-confirm-actions"><button onClick={() => setSuggestion(null)}>Descartar</button><button className="cf-primary" disabled={busy || !suggestion.prompt.trim()} onClick={() => {
+          const target = live.current?.nodes.find((n) => n.id === suggestion.nodeId);
+          if (live.current?.id !== suggestion.projectId || !target || target.data.prompt !== suggestion.original) {
+            setError("O prompt mudou durante a sugestão. Solicite uma nova melhoria para preservar sua edição.");
+            setSuggestion(null); return;
+          }
+          patch({ prompt: suggestion.prompt }, suggestion.nodeId);
+          setSuggestion(null);
+          notify("Prompt melhorado. Você pode continuar editando.", "success");
+        }}>Aplicar melhoria</button></div>
+      </FlowDialog>}
       {shareLink && <FlowDialog title="Compartilhar preview" className="cf-share-dialog" onClose={() => setShareLink("")}>
         <button className="cf-modal-close" aria-label="Fechar compartilhamento" onClick={() => setShareLink("")}>×</button>
         <p className="cf-eyebrow">LINK PÚBLICO</p><h2>Compartilhe seu canvas</h2>

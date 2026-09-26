@@ -153,6 +153,12 @@ export const RECIPES = [
     icon: "◇",
   },
   {
+    id: "ugc",
+    name: "UGC · Produtos A e B",
+    desc: "Uma influencer, dois produtos e dois vídeos.",
+    icon: "♧",
+  },
+  {
     id: "character",
     name: "Character Consistency",
     desc: "Preserve seu personagem entre cenas.",
@@ -160,6 +166,35 @@ export const RECIPES = [
   },
 ];
 export function recipe(id: string): Project {
+  if (id === "ugc") {
+    const nodes = (["idea", "image", "image", "image", "video", "video"] as Kind[]).map(block);
+    const [idea, influencer, productA, productB, videoA, videoB] = nodes;
+    idea.data.title = "Ideia da campanha UGC";
+    idea.data.prompt = "Crie uma campanha UGC natural e autêntica para apresentar os produtos A e B. Use a mesma influencer nas duas peças, com linguagem próxima e foco em demonstrar cada produto. Não invente benefícios ou resultados.";
+    influencer.data.title = "Imagem da influencer";
+    influencer.data.prompt = "Crie uma influencer adulta em um ambiente cotidiano, com luz natural e estética de conteúdo gravado no celular. Enquadramento médio, expressão espontânea e espaço para apresentar um produto. Mantenha uma identidade visual consistente para as duas peças.";
+    influencer.data.ratio = "9:16";
+    influencer.position = { x: 410, y: 220 };
+    idea.position = { x: 0, y: 220 };
+    for (const [index, product, video] of [[0, productA, videoA], [1, productB, videoB]] as const) {
+      const label = index === 0 ? "A" : "B";
+      product.data.title = `Influencer + produto ${label}`;
+      product.data.prompt = `Crie uma imagem UGC da mesma influencer apresentando o produto ${label}. Preserve rosto, roupa e ambiente da influencer. Use a imagem do produto selecionada como referência para preservar embalagem, cores e proporções. Componha uma demonstração natural com o produto claramente visível, sem inventar características.`;
+      product.data.ratio = "9:16";
+      product.position = { x: 820, y: index * 480 };
+      video.data.title = `Vídeo UGC · Produto ${label}`;
+      video.data.prompt = `Anime a imagem da influencer com o produto ${label} em uma cena UGC natural. Preserve a identidade e a aparência do produto. Use gestos sutis para apresentá-lo, expressão espontânea e movimento leve de câmera de celular. Não acrescente produtos, textos ou promessas de resultado.`;
+      video.data.ratio = "9:16";
+      video.position = { x: 1230, y: index * 480 };
+      // The composed product image is the starting frame; the portrait is not an ending frame.
+      video.data.excluded = [influencer.id];
+    }
+    return {
+      id: crypto.randomUUID(), title: "UGC · Produtos A e B", nodes,
+      edges: [[idea, influencer], [influencer, productA], [influencer, productB], [productA, videoA], [productB, videoB]].map(([source, target]) => ({ id: crypto.randomUUID(), source: source.id, target: target.id, data: { kind: "input" } })),
+      updatedAt: new Date().toISOString(), finished: false, revision: 0,
+    };
+  }
   const kinds: Kind[] =
     id === "blank"
       ? ["idea"]
@@ -340,6 +375,9 @@ export function reconcile(previous: Project | null, next: Project): Project {
       dirty.add(n.id);
       changed.add(n.id);
     }
+    if (n.data.referenceId !== old.data.referenceId &&
+        (n.data.assetId !== n.data.referenceId || n.data.prompt.trim()))
+      dirty.add(n.id);
     if (
       n.data.assetId !== old.data.assetId ||
       n.data.referenceId !== old.data.referenceId

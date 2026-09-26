@@ -3,7 +3,7 @@
 // as notificações avisam quando o vídeo fica pronto (a geração leva minutos).
 import { integracaoMCP, openrouter, NOTIFICACOES, type Integracao } from "./setup-comum";
 
-const OPENROUTER = openrouter({ beneficio: "Escreve os três conceitos a partir do seu briefing" });
+const OPENROUTER = openrouter({ visao: true, beneficio: "Escreve os três conceitos a partir do seu briefing" });
 
 /** Prefixo das chaves salvas (HIGGSFIELD_URL, HIGGSFIELD_CODIGO, HIGGSFIELD_REFRESH...). */
 export const PREFIXO_HIGGSFIELD = "HIGGSFIELD";

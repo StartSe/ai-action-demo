@@ -633,7 +633,7 @@ test("prévia de geração valida toda a sequência antes de cobrar e não alter
   assert.match(invalid.issue.message, /5 segundos/);
 });
 
-test("prévia bloqueia prompt vazio, excesso de referências e vídeo usado como imagem", () => {
+test("prévia bloqueia prompt vazio e vídeo como imagem, mas adapta referências ao limite", () => {
   const { generationPlan } = require("../lib/flow/experience.ts");
   const p = model.recipe("product");
   p.nodes[0].data.prompt = "";
@@ -646,7 +646,10 @@ test("prévia bloqueia prompt vazio, excesso de referências e vídeo usado como
   ready.kind = "image";
   assert.deepEqual(generationPlan(p, "all", [ready]).steps.map((n) => n.data.kind), ["video"]);
   Object.assign(p.nodes[2].data, { model: "kling-v2.1-standard-i2v", duration: 5, referenceId: "extra" });
-  assert.match(generationPlan(p, "all", [ready, { ...ready, id: "extra" }]).issue.message, /até 1/);
+  const limited = generationPlan(p, "all", [ready, { ...ready, id: "extra" }]);
+  assert.equal(limited.issue, null);
+  assert.equal(limited.warnings.length, 1);
+  assert.match(limited.warnings[0].message, /permanecerão conectadas sem envio/);
 });
 
 test("duplicar mantém entradas e arquivo, sem reutilizar o trabalho ou compartilhar campos mutáveis", () => {
@@ -740,4 +743,272 @@ test("download de arquivo envia attachment com nome seguro e preserva conteúdo"
   assert.equal(r.status, 200);
   assert.match(r.headers.get("Content-Disposition"), /^attachment; filename\*=UTF-8''V%C3%ADdeo%20%22final%22.mp4$/);
   assert.equal(await r.text(), "download bytes");
+});
+
+test("referências excedentes são preservadas; Kling, Veo e Wan recebem só o limite", async () => {
+  const { generationInput, modelReferences, modelSettings } = require("../lib/flow/experience.ts");
+  const p = model.recipe("social");
+  const video = model.block("video", 5);
+  video.data.prompt = "Anime o produto";
+  p.nodes.push(video);
+  for (const [i, source] of p.nodes.slice(1, 5).entries()) {
+    source.data.assetId = `cap-ref-${i}`;
+    store.addAsset({ id: source.data.assetId, kind: "image", url: `https://test.example/${i}.png` });
+    p.edges.push({ id: `ref-${i}`, source: source.id, target: video.id, data: { kind: "input" } });
+  }
+  for (const [id, count] of [["kling-v2.1-standard-i2v", 1], ["veo3.1-fast", 2], ["wan2.2", 2], ["veo3.1-reference", 3]]) {
+    Object.assign(video.data, modelSettings(video.data, id));
+    const input = generationInput(p, video, store.assets());
+    assert.equal(input.images.length, count);
+    assert.equal(modelReferences(p, video).omitted.length, 4 - count);
+    assert.equal(model.referencePlan(p, video.id).length, 4);
+    const before = JSON.stringify(p);
+    store.save(p);
+    let sent;
+    global.fetch = async (url, init) => {
+      sent = JSON.parse(init.body);
+      return Response.json({ request_id: "cap-request" });
+    };
+    const response = await generate.POST(post("flow-generate", { projectId: p.id, nodeId: video.id, id: crypto.randomUUID() }));
+    assert.equal(response.status, 200);
+    const j = (await response.json()).job;
+    store.saveJob({ ...j, status: "failed" });
+    p.revision = store.project(p.id).revision;
+    assert.equal(sent.images_list?.length ?? (sent.last_image ? 2 : 1), count);
+    assert.equal(JSON.parse(before).nodes.length, p.nodes.length);
+  }
+  video.data.excluded = [p.nodes[1].id];
+  assert.equal(modelReferences(p, video).used[0].assetId, p.nodes[2].data.assetId);
+  global.fetch = originalFetch;
+});
+
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+test("Gerar tudo executa folhas em paralelo, compartilha ancestrais e espera cada dependência", async () => {
+  const { executeFlow } = require("../lib/flow/execution.ts");
+  const p = model.recipe("social");
+  const upstream = deferred();
+  const gates = p.nodes.slice(2).map(() => deferred());
+  const started = [];
+  const finished = [];
+  const run = executeFlow(p, "all", async (n) => {
+    started.push(n.id);
+    if (n.id === p.nodes[1].id) await upstream.promise;
+    else await gates[p.nodes.findIndex((b) => b.id === n.id) - 2].promise;
+    finished.push(n.id);
+  });
+  await tick();
+  assert.deepEqual(started, [p.nodes[1].id]);
+  upstream.resolve();
+  await tick();
+  assert.deepEqual(started, p.nodes.slice(1).map((n) => n.id));
+  assert.equal(finished.length, 1);
+  gates.forEach((g) => g.resolve());
+  await run;
+  assert.equal(finished.length, 4);
+});
+
+test("falha em uma folha não abandona a vizinha nem executa entrega dependente", async () => {
+  const { executeFlow } = require("../lib/flow/execution.ts");
+  const p = model.recipe("campaign");
+  p.nodes[1].data.assetId = "ready";
+  const gate = deferred();
+  const started = [];
+  let settled = false;
+  const run = executeFlow(p, "all", async (n) => {
+    started.push(n.id);
+    if (n.id === p.nodes[3].id) throw new Error("Falha no vídeo");
+    await gate.promise;
+  }).catch((e) => { settled = true; return e; });
+  await tick();
+  assert.equal(settled, false);
+  assert.deepEqual(started.sort(), [p.nodes[2].id, p.nodes[3].id].sort());
+  gate.resolve();
+  assert.match((await run).message, /Falha no vídeo/);
+  assert.ok(!started.includes(p.nodes[4].id));
+});
+
+test("pausar espera envios ativos e impede os dependentes; execução individual não dispara ancestrais", async () => {
+  const { executeFlow } = require("../lib/flow/execution.ts");
+  const p = model.recipe("product");
+  const gate = deferred();
+  const started = [];
+  let stop = false;
+  const run = executeFlow(p, "all", async (n) => { started.push(n.id); await gate.promise; }, () => stop);
+  await tick();
+  stop = true;
+  gate.resolve();
+  await run;
+  assert.deepEqual(started, [p.nodes[1].id]);
+  const single = [];
+  await executeFlow(p, p.nodes[2].id, async (n) => { single.push(n.id); });
+  assert.deepEqual(single, [p.nodes[2].id]);
+});
+
+test("upload ou biblioteca mantém referência após gerar, reabrir, remover resultado e gerar novamente", async () => {
+  const { selectReference } = require("../lib/flow/editing.ts");
+  const p = model.recipe("product");
+  const n = p.nodes[1];
+  n.data.prompt = "Produto iluminado";
+  Object.assign(n.data, selectReference(n, "original-ref"));
+  assert.equal(n.data.dirty, true);
+  store.addAsset({ id: "original-ref", kind: "image", url: "https://test.example/original.png" });
+  let current = store.save(p);
+  const sent = [];
+  global.fetch = async (url, init) => {
+    sent.push(JSON.parse(init.body));
+    return Response.json({ request_id: crypto.randomUUID() });
+  };
+  for (let i = 0; i < 2; i++) {
+    const response = await generate.POST(post("flow-generate", { projectId: p.id, nodeId: n.id, id: crypto.randomUUID() }));
+    assert.equal(response.status, 200);
+    const j = (await response.json()).job;
+    const asset = { id: `generated-${i}`, kind: "image", url: `https://test.example/generated-${i}.png` };
+    store.saveJob({ ...j, status: "completed", asset });
+    current = model.receiveGeneration(current, { ...j, asset });
+    assert.equal(current.nodes[1].data.referenceId, "original-ref");
+    current.nodes[1].data.assetId = undefined;
+    current = store.save(current);
+    current = store.project(p.id);
+  }
+  assert.deepEqual(sent.map((body) => body.images_list), [["https://test.example/original.png"], ["https://test.example/original.png"]]);
+  const changed = structuredClone(current);
+  changed.nodes[1].data.referenceId = "replacement";
+  assert.equal(model.reconcile(current, changed).nodes[1].data.dirty, true);
+  global.fetch = originalFetch;
+});
+
+test("varinha melhora o prompt atual com ideia, fluxo e múltiplas imagens reais", async () => {
+  const improve = require("../app/api/flow-prompt/route.ts");
+  const { saveUpload, assetUrl } = require("../lib/flow/media.ts");
+  const p = model.recipe("product");
+  p.nodes[0].data.prompt = "Campanha de verão";
+  p.nodes[1].data.prompt = "Produto na praia";
+  p.nodes[1].data.assetId = "vision-input";
+  p.nodes[2].data.prompt = "Anime lentamente";
+  p.nodes[2].data.referenceId = "vision-selected";
+  for (const id of ["vision-input", "vision-selected"]) {
+    await saveUpload(id, Buffer.from(`image bytes ${id}`));
+    store.addAsset({ id, kind: "image", mimeType: "image/png", title: id, url: assetUrl(id) });
+  }
+  const key = process.env.OPENROUTER_API_KEY;
+  process.env.OPENROUTER_API_KEY = "test-only-key";
+  let body;
+  global.fetch = async (url, init) => {
+    assert.match(String(url), /openrouter/);
+    body = JSON.parse(init.body);
+    return Response.json({ choices: [{ message: { content: "Anime lentamente o produto com luz de verão." } }] });
+  };
+  try {
+    const response = await improve.POST(post("flow-prompt", { project: p, nodeId: p.nodes[2].id }));
+    assert.equal(response.status, 200);
+    assert.match((await response.json()).prompt, /luz de verão/);
+    const content = body.messages[1].content;
+    assert.equal(content.filter((p) => p.type === "image_url").length, 2);
+    assert.ok(content[1].image_url.url.startsWith("data:image/png;base64,"));
+    const input = JSON.parse(content[0].text);
+    assert.equal(input.promptAtual, "Anime lentamente");
+    assert.equal(input.fluxoConectado[0].prompt, "Campanha de verão");
+    assert.equal(input.fluxoConectado[1].prompt, "Produto na praia");
+    assert.equal(p.nodes[2].data.prompt, "Anime lentamente");
+    p.nodes[2].data.excluded = [p.nodes[1].id];
+    await improve.POST(post("flow-prompt", { project: p, nodeId: p.nodes[2].id }));
+    assert.equal(body.messages[1].content.filter((p) => p.type === "image_url").length, 1);
+    let called = false;
+    global.fetch = async () => { called = true; throw new Error("Should not call"); };
+    p.nodes[2].data.prompt = "";
+    assert.notEqual((await improve.POST(post("flow-prompt", { project: p, nodeId: p.nodes[2].id }))).status, 200);
+    assert.equal(called, false);
+  } finally {
+    if (key === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = key;
+    global.fetch = originalFetch;
+  }
+});
+
+test("vídeos folha rodam juntos e cada Output é liberado sem esperar o outro ramo", async () => {
+  const { executeFlow } = require("../lib/flow/execution.ts");
+  const p = model.recipe("product");
+  p.nodes[1].data.assetId = "ready-image";
+  const video = model.block("video", 4);
+  const output = model.block("output", 5);
+  p.nodes.push(video, output);
+  p.edges.push({ id: "parallel-video", source: p.nodes[1].id, target: video.id, data: { kind: "input" } }, { id: "parallel-output", source: video.id, target: output.id, data: { kind: "input" } });
+  const first = deferred(), second = deferred();
+  const started = [];
+  const run = executeFlow(p, "all", async (n) => {
+    started.push(n.id);
+    if (n.id === p.nodes[2].id) await first.promise;
+    if (n.id === video.id) await second.promise;
+  });
+  await tick();
+  assert.deepEqual(started, [p.nodes[2].id, video.id]);
+  first.resolve();
+  await tick();
+  assert.ok(started.includes(p.nodes[3].id));
+  assert.ok(!started.includes(output.id));
+  second.resolve();
+  await run;
+  assert.ok(started.includes(output.id));
+});
+
+test("imagem enviada sem prompt permanece como fonte pronta; limite de imagem não é truncado", () => {
+  const { selectReference } = require("../lib/flow/editing.ts");
+  const { generationInput } = require("../lib/flow/experience.ts");
+  const p = model.recipe("product"), next = structuredClone(p);
+  Object.assign(next.nodes[1].data, selectReference(next.nodes[1], "source-image"));
+  const reconciled = model.reconcile(p, next);
+  assert.equal(reconciled.nodes[1].data.dirty, false);
+  assert.equal(reconciled.nodes[2].data.dirty, true);
+  const image = model.block("image", 0);
+  image.data.prompt = "Componha o produto";
+  const many = { ...model.recipe("blank"), nodes: [image], edges: [] };
+  const assets = [];
+  for (let i = 0; i < 15; i++) {
+    const source = model.block("image", i + 1);
+    source.data.assetId = `many-${i}`;
+    many.nodes.push(source);
+    many.edges.push({ id: `edge-${i}`, source: source.id, target: image.id, data: {kind: "input"} });
+    assets.push({id: source.data.assetId, kind: "image", url: `https://test.example/${i}.png`});
+  }
+  assert.throws(() => generationInput(many, image, assets), /até 14/);
+});
+
+test("receita UGC compartilha influencer e isola produtos A/B até os dois vídeos folha", async () => {
+  const { generationPlan, generationInput } = require("../lib/flow/experience.ts");
+  const { executeFlow } = require("../lib/flow/execution.ts");
+  const p = model.recipe("ugc");
+  model.validateProject(p);
+  assert.ok(model.RECIPES.some((r) => r.id === "ugc"));
+  assert.deepEqual(p.nodes.map((n) => n.data.kind), ["idea", "image", "image", "image", "video", "video"]);
+  const [idea, influencer, a, b, va, vb] = p.nodes;
+  assert.deepEqual(p.nodes.filter((n) => !p.edges.some((e) => e.source === n.id)).map((n) => n.id), [va.id, vb.id]);
+  assert.deepEqual(model.context(p, a.id).map((n) => n.id), [idea.id, influencer.id]);
+  assert.deepEqual(model.context(p, b.id).map((n) => n.id), [idea.id, influencer.id]);
+  assert.deepEqual(model.context(p, va.id).map((n) => n.id), [idea.id, a.id]);
+  assert.deepEqual(model.context(p, vb.id).map((n) => n.id), [idea.id, b.id]);
+  assert.equal(generationPlan(p, "all", []).issue, null);
+  assert.equal(generationPlan(p, "all", []).steps.length, 5);
+  assert.ok(p.nodes.slice(1).every((n) => n.data.ratio === "9:16"));
+  const available = [];
+  const sent = [];
+  const aGate = deferred(), bGate = deferred();
+  const running = executeFlow(p, "all", async (n) => {
+    sent.push(n.id);
+    if (n.id === a.id) await aGate.promise;
+    if (n.id === b.id) await bGate.promise;
+    const input = generationInput(p, n, available);
+    if (n.data.kind === "video") assert.deepEqual(input.images, [`https://test.example/${n.id === va.id ? a.id : b.id}.png`]);
+    n.data.assetId = n.id;
+    available.push({id:n.id,kind:n.data.kind,url:`https://test.example/${n.id}.png`});
+  });
+  await tick();
+  assert.deepEqual(sent, [influencer.id, a.id, b.id]);
+  aGate.resolve();
+  await tick();
+  assert.ok(sent.includes(va.id));
+  assert.ok(!sent.includes(vb.id));
+  bGate.resolve();
+  await running;
+  assert.ok(sent.includes(vb.id));
+  assert.equal(sent.filter((id) => id === influencer.id).length, 1);
 });

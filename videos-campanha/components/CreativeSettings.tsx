@@ -57,6 +57,10 @@ export default function CreativeSettings() {
             <CartaoIntegracao integracao={integration} numero={index + 1} aoSalvar={() => void load()} />
             <p className="cf-provider-note">{integration.id === "muapi" ? "Imagens e vídeos com Nano Banana, Veo, Wan e Kling. As gerações utilizam o saldo MuAPI." : "Entre no Higgsfield para autorizar sua conta. A geração com modelos Higgsfield no editor ainda está em integração; autorizar não libera o Seedance nos blocos por enquanto."}</p>
           </div>)}</div>
+          {data.integracoes.filter((i) => i.id === "openrouter").map((integration) => <section key={integration.id}>
+            <div className="cf-settings-section"><div><h2>Melhoria de prompts com IA</h2><p>A varinha usa seu prompt, a ideia e as imagens conectadas. Configure um modelo de visão para considerar as referências.</p></div></div>
+            <CartaoIntegracao integracao={{ ...integration, beneficio: "Melhora prompts com o contexto e as imagens do fluxo" }} numero={3} aoSalvar={() => void load()} />
+          </section>)}
           <footer className="cf-settings-footer">As credenciais ficam cifradas no servidor. Valores definidos no ambiente têm prioridade sobre os salvos nesta tela.</footer>
         </>}
       </main>

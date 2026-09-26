@@ -173,18 +173,20 @@ export async function askVision({
   system,
   prompt,
   imagem,
+  imagens,
   maxTokens = 2000,
   temperature = 0.4,
 }: {
   system: string;
   prompt: string;
-  imagem: string;
+  imagem?: string;
+  imagens?: string[];
   maxTokens?: number;
   temperature?: number;
 }): Promise<string> {
   const messages: VisionMessage[] = [
     { role: "system", content: system },
-    { role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: imagem } }] },
+    { role: "user", content: [{ type: "text", text: prompt }, ...(imagens ?? (imagem ? [imagem] : [])).map((url): VisionContentPart => ({ type: "image_url", image_url: { url } }))] },
   ];
   const res = await chamarOpenRouter({
     model: visionModelName(),

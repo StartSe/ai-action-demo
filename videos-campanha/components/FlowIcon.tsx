@@ -1,5 +1,6 @@
 import type { SVGProps } from "react";
 export type FlowIconName =
+  | "wand"
   | "idea"
   | "image"
   | "video"
@@ -17,6 +18,7 @@ export type FlowIconName =
   | "expand"
   | "chevron";
 const paths: Record<FlowIconName, React.ReactNode> = {
+  wand: <><path d="m4 20 12-12 4 4L8 24Z" transform="translate(0 -3)" /><path d="m13 8 3 3M5 3v4M3 5h4M19 2v4M17 4h4" /></>,
   idea: (
     <path d="m12 2 2.8 7.2L22 12l-7.2 2.8L12 22l-2.8-7.2L2 12l7.2-2.8L12 2Z" />
   ),

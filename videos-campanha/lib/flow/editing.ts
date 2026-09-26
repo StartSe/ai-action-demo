@@ -81,3 +81,13 @@ export function deriveBlock(
     nodeId: n.id,
   };
 }
+
+/** References survive generation, version changes and removal of the result. */
+export function selectReference(node: Block, assetId: string): Partial<Block["data"]> {
+  return {
+    referenceId: assetId,
+    assetId: node.data.assetId || (node.data.kind === "video" ? undefined : assetId),
+    dirty: node.data.kind === "video" || Boolean(node.data.prompt.trim()) || Boolean(node.data.assetId && node.data.assetId !== assetId),
+    selectionVersion: (node.data.selectionVersion || 0) + 1,
+  };
+}
